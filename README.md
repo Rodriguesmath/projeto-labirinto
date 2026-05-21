@@ -1,0 +1,141 @@
+# Mesa Labirinto Controlada por Joystick
+
+![ESP-IDF](https://img.shields.io/badge/ESP--IDF-v6.1--dev-E7352C?logo=espressif&logoColor=white)
+![Target](https://img.shields.io/badge/Target-ESP32-222222?logo=espressif&logoColor=white)
+![Language](https://img.shields.io/badge/Language-C-00599C?logo=c&logoColor=white)
+![RTOS](https://img.shields.io/badge/RTOS-FreeRTOS-5C2D91)
+![Docs](https://img.shields.io/badge/Docs-Doxygen-2C4AA8)
+![Status](https://img.shields.io/badge/Fase%201-Build%20OK-2EA44F)
+
+Firmware da primeira entrega do projeto final de Sistemas Embarcados 2026.1: uma mesa labirinto controlada por joystick analógico, com dois servomotores para inclinação nos eixos X/Y e LED de indicação de sistema pronto.
+
+O projeto foi estruturado como uma aplicação ESP-IDF modular, com abstração de hardware por componente, documentação Doxygen e uma camada própria para isolar o uso direto do RTOS.
+
+## Escopo Da Fase 1
+
+- Leitura analógica dos eixos X e Y do joystick.
+- Filtragem e normalização dos comandos para a faixa de -100% a 100%.
+- Conversão dos comandos em PWM de 50 Hz para dois servomotores.
+- Movimento proporcional e suavizado da mesa.
+- Organização em três tarefas, conforme requisito da entrega.
+- Logs seriais para debug e LED de inicialização concluída.
+
+## Arquitetura
+
+```text
+main
+└── app_labyrinth
+    ├── bsp_board
+    ├── bsp_joystick
+    ├── bsp_servo
+    ├── bsp_status_led
+    └── rtos_port
+```
+
+| Camada | Responsabilidade |
+| --- | --- |
+| `main` | Ponto de entrada mínimo da aplicação. |
+| `app_labyrinth` | Orquestra inicialização, filas e tarefas da Fase 1. |
+| `bsp_board` | Centraliza pinagem, canais ADC e configuração comum de board. |
+| `bsp_joystick` | Encapsula ADC, filtro EMA, zona morta e curva de resposta. |
+| `bsp_servo` | Encapsula LEDC/PWM e mapeia comando percentual para pulso de servo. |
+| `bsp_status_led` | Encapsula o GPIO do LED de pronto. |
+| `rtos_port` | Interface de abstração para tarefas, filas e delays do FreeRTOS. |
+
+Mais detalhes estão em [docs/architecture.md](docs/architecture.md).
+
+## Fluxo De Dados
+
+```text
+Joystick ADC
+    │
+    ▼
+bsp_joystick
+    │
+    ▼
+joystick_task
+    ├── servo_queue ──► servo_task ──► bsp_servo ──► PWM dos servos
+    └── debug_queue ──► status_task ─► ESP_LOG / UART
+```
+
+## Tarefas FreeRTOS
+
+| Tarefa | Prioridade | Responsabilidade | Frequência |
+| --- | ---: | --- | --- |
+| `joystick_task` | 5 | Lê joystick X/Y, filtra e publica amostras processadas. | 50 Hz |
+| `servo_task` | 4 | Atualiza os dois servos a partir do comando mais recente. | Sob demanda |
+| `status_task` | 3 | Liga o LED de pronto e emite logs seriais de status. | A cada 25 amostras |
+
+## Hardware
+
+| Sinal | Pino ESP32 | Função |
+| --- | --- | --- |
+| Joystick X | GPIO32 / ADC1_CH4 | Entrada analógica do eixo X |
+| Joystick Y | GPIO33 / ADC1_CH5 | Entrada analógica do eixo Y |
+| Servo X | GPIO18 | PWM 50 Hz para inclinação no eixo X |
+| Servo Y | GPIO19 | PWM 50 Hz para inclinação no eixo Y |
+| LED de pronto | GPIO2 | Indicação de inicialização concluída |
+
+A pinagem fica centralizada em `components/bsp_board/include/bsp_board.h`, facilitando ajustes de montagem sem alterar a lógica da aplicação.
+
+## Requisitos
+
+- ESP32.
+- ESP-IDF v6.1-dev ou compatível.
+- Doxygen, opcional, para geração da documentação HTML.
+
+## Build E Gravação
+
+Configure o ambiente da ESP-IDF e compile:
+
+```bash
+idf.py build
+```
+
+Grave e acompanhe os logs seriais:
+
+```bash
+idf.py -p PORT flash monitor
+```
+
+Substitua `PORT` pela porta serial do ESP32, por exemplo `/dev/ttyUSB0`.
+
+## Documentação
+
+Os headers públicos dos componentes possuem comentários Doxygen. Para gerar a documentação HTML:
+
+```bash
+doxygen Doxyfile
+```
+
+O HTML será gerado em:
+
+```text
+docs/doxygen/html
+```
+
+## Estrutura Do Projeto
+
+```text
+.
+├── components
+│   ├── app_labyrinth
+│   ├── bsp_board
+│   ├── bsp_joystick
+│   ├── bsp_servo
+│   ├── bsp_status_led
+│   └── rtos_port
+├── docs
+│   └── architecture.md
+├── main
+│   └── joystick-filtering.c
+├── CMakeLists.txt
+├── Doxyfile
+└── README.md
+```
+
+## Estado Atual
+
+- Build validado com `idf.py build`.
+- Documentação validada com `doxygen Doxyfile`.
+- Binário gerado em `build/joystick-filtering.bin`.

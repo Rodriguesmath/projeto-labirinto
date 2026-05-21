@@ -1,0 +1,14 @@
+PROJECT_NAME           = "Mesa Labirinto - Fase 1"
+PROJECT_BRIEF          = "Controle local com joystick, servos e abstração RTOS"
+OUTPUT_DIRECTORY       = docs/doxygen
+INPUT                  = README.md docs components main
+RECURSIVE              = YES
+FILE_PATTERNS          = *.h *.c *.md
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = NO
+HAVE_DOT               = NO
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+USE_MDFILE_AS_MAINPAGE = README.md
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = YES
