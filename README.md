@@ -1,4 +1,4 @@
-# Mesa Labirinto Controlada por Joystick
+# Projeto - Labirinto
 
 ![ESP-IDF](https://img.shields.io/badge/ESP--IDF-v6.1--dev-E7352C?logo=espressif&logoColor=white)
 ![Target](https://img.shields.io/badge/Target-ESP32-222222?logo=espressif&logoColor=white)
@@ -128,7 +128,7 @@ docs/doxygen/html
 ├── docs
 │   └── architecture.md
 ├── main
-│   └── joystick-filtering.c
+│   └── projeto_labirinto.c
 ├── CMakeLists.txt
 ├── Doxyfile
 └── README.md
@@ -138,4 +138,4 @@ docs/doxygen/html
 
 - Build validado com `idf.py build`.
 - Documentação validada com `doxygen Doxyfile`.
-- Binário gerado em `build/joystick-filtering.bin`.
+- Binário gerado em `build/projeto-labirinto.bin`.

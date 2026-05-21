@@ -8,7 +8,7 @@ var searchData=
   ['app_5flabyrinth_2eh_5',['app_labyrinth.h',['../app__labyrinth_8h.html',1,'']]],
   ['app_5flabyrinth_5fcontext_5ft_6',['app_labyrinth_context_t',['../structapp__labyrinth__context__t.html',1,'']]],
   ['app_5flabyrinth_5fstart_7',['app_labyrinth_start',['../app__labyrinth_8h.html#af0b7db3320bc38c9e3e8eef2cf3f133d',1,'app_labyrinth_start(void):&#160;app_labyrinth.c'],['../app__labyrinth_8c.html#af0b7db3320bc38c9e3e8eef2cf3f133d',1,'app_labyrinth_start(void):&#160;app_labyrinth.c']]],
-  ['app_5fmain_8',['app_main',['../joystick-filtering_8c.html#a630544a7f0a2cc40d8a7fefab7e2fe70',1,'joystick-filtering.c']]],
+  ['app_5fmain_8',['app_main',['../projeto__labirinto_8c.html#a630544a7f0a2cc40d8a7fefab7e2fe70',1,'projeto_labirinto.c']]],
   ['architecture_2emd_9',['architecture.md',['../architecture_8md.html',1,'']]],
   ['arg_10',['arg',['../structrtos__task__config__t.html#a57ae6d463d06a67a16a067f93996a7cb',1,'rtos_task_config_t']]],
   ['arquitetura_11',['Arquitetura',['../index.html#autotoc_md2',1,'']]],

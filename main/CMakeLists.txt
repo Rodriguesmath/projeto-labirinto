@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "joystick-filtering.c"
+    SRCS "projeto_labirinto.c"
     INCLUDE_DIRS "."
     REQUIRES app_labyrinth
 )

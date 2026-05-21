@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['labirinto_20controlada_20por_20joystick_0',['Mesa Labirinto Controlada por Joystick',['../index.html',1,'']]]
+  ['objetivo_0',['Objetivo',['../md_docs_2architecture.html#autotoc_md12',1,'']]]
 ];
