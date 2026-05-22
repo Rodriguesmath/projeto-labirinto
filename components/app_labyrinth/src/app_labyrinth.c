@@ -17,7 +17,7 @@
 #define STATUS_TASK_PRIORITY 3U
 #define DEBUG_PRINT_EVERY_SAMPLES 25U
 #define SERVO_IDLE_DELAY_MS 1U
-#define SERVO_INVALID_PERCENT 101
+#define SERVO_MAX_STEP_PERCENT 3
 
 static const char *TAG = "app_labyrinth";
 
@@ -35,6 +35,18 @@ static esp_err_t create_queue(rtos_queue_handle_t *queue, size_t length, size_t 
 {
     *queue = rtos_queue_create(length, item_size);
     return (*queue == NULL) ? ESP_ERR_NO_MEM : ESP_OK;
+}
+
+static int step_towards_percent(int current, int target)
+{
+    const int delta = target - current;
+    if (delta > SERVO_MAX_STEP_PERCENT) {
+        return current + SERVO_MAX_STEP_PERCENT;
+    }
+    if (delta < -SERVO_MAX_STEP_PERCENT) {
+        return current - SERVO_MAX_STEP_PERCENT;
+    }
+    return target;
 }
 
 static void joystick_task(void *arg)
@@ -58,20 +70,23 @@ static void joystick_task(void *arg)
 static void servo_task(void *arg)
 {
     app_labyrinth_context_t *ctx = (app_labyrinth_context_t *)arg;
-    int last_x_percent = SERVO_INVALID_PERCENT;
-    int last_y_percent = SERVO_INVALID_PERCENT;
+    int current_x_percent = 0;
+    int current_y_percent = 0;
 
     while (true) {
         bsp_joystick_sample_t sample = {0};
         if (rtos_queue_receive(ctx->servo_queue, &sample, RTOS_WAIT_FOREVER) == RTOS_OK) {
-            if (sample.x_percent != last_x_percent) {
-                ESP_ERROR_CHECK_WITHOUT_ABORT(bsp_servo_write_percent(&ctx->servo_x, sample.x_percent));
-                last_x_percent = sample.x_percent;
+            const int next_x_percent = step_towards_percent(current_x_percent, sample.x_percent);
+            const int next_y_percent = step_towards_percent(current_y_percent, sample.y_percent);
+
+            if (next_x_percent != current_x_percent) {
+                ESP_ERROR_CHECK_WITHOUT_ABORT(bsp_servo_write_percent(&ctx->servo_x, next_x_percent));
+                current_x_percent = next_x_percent;
             }
 
-            if (sample.y_percent != last_y_percent) {
-                ESP_ERROR_CHECK_WITHOUT_ABORT(bsp_servo_write_percent(&ctx->servo_y, sample.y_percent));
-                last_y_percent = sample.y_percent;
+            if (next_y_percent != current_y_percent) {
+                ESP_ERROR_CHECK_WITHOUT_ABORT(bsp_servo_write_percent(&ctx->servo_y, next_y_percent));
+                current_y_percent = next_y_percent;
             }
 
             rtos_delay_ms(SERVO_IDLE_DELAY_MS);
