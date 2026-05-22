@@ -7,6 +7,8 @@
 #define SERVO_LEDC_RESOLUTION LEDC_TIMER_16_BIT
 #define SERVO_PWM_PERIOD_US 20000U
 #define SERVO_MAX_DUTY ((1U << 16U) - 1U)
+#define MAX_PERCENT 15
+#define MIN_PERCENT -15
 
 static int clamp_percent(int percent)
 {
@@ -103,6 +105,12 @@ esp_err_t bsp_servo_write_percent(const bsp_servo_t *servo, int percent)
 {
     if (servo == NULL) {
         return ESP_ERR_INVALID_ARG;
+    }
+
+    if (percent > MAX_PERCENT) {
+        percent = MAX_PERCENT;
+    } else if (percent < MIN_PERCENT) {
+        percent = MIN_PERCENT;
     }
 
     const uint32_t pulse_us = percent_to_pulse_us(&servo->config, percent);
