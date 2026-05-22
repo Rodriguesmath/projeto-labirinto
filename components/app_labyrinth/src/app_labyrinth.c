@@ -16,6 +16,8 @@
 #define SERVO_TASK_PRIORITY 4U
 #define STATUS_TASK_PRIORITY 3U
 #define DEBUG_PRINT_EVERY_SAMPLES 25U
+#define SERVO_IDLE_DELAY_MS 1U
+#define SERVO_INVALID_PERCENT 101
 
 static const char *TAG = "app_labyrinth";
 
@@ -56,12 +58,23 @@ static void joystick_task(void *arg)
 static void servo_task(void *arg)
 {
     app_labyrinth_context_t *ctx = (app_labyrinth_context_t *)arg;
+    int last_x_percent = SERVO_INVALID_PERCENT;
+    int last_y_percent = SERVO_INVALID_PERCENT;
 
     while (true) {
         bsp_joystick_sample_t sample = {0};
         if (rtos_queue_receive(ctx->servo_queue, &sample, RTOS_WAIT_FOREVER) == RTOS_OK) {
-            ESP_ERROR_CHECK_WITHOUT_ABORT(bsp_servo_write_percent(&ctx->servo_x, sample.x_percent));
-            ESP_ERROR_CHECK_WITHOUT_ABORT(bsp_servo_write_percent(&ctx->servo_y, sample.y_percent));
+            if (sample.x_percent != last_x_percent) {
+                ESP_ERROR_CHECK_WITHOUT_ABORT(bsp_servo_write_percent(&ctx->servo_x, sample.x_percent));
+                last_x_percent = sample.x_percent;
+            }
+
+            if (sample.y_percent != last_y_percent) {
+                ESP_ERROR_CHECK_WITHOUT_ABORT(bsp_servo_write_percent(&ctx->servo_y, sample.y_percent));
+                last_y_percent = sample.y_percent;
+            }
+
+            rtos_delay_ms(SERVO_IDLE_DELAY_MS);
         }
     }
 }
