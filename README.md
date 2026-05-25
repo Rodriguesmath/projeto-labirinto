@@ -7,7 +7,7 @@
 ![Docs](https://img.shields.io/badge/Docs-Doxygen-2C4AA8)
 ![Status](https://img.shields.io/badge/Fase%201-Build%20OK-2EA44F)
 
-Firmware da primeira entrega do projeto final de Sistemas Embarcados 2026.1: uma mesa labirinto controlada por joystick analógico, com dois servomotores para inclinação nos eixos X/Y e LED de indicação de sistema pronto.
+Firmware da primeira entrega do projeto final de Sistemas Embarcados 2026.1: uma mesa labirinto controlada por joystick analógico, com dois servomotores para inclinação nos eixos X/Y.
 
 O projeto foi estruturado como uma aplicação ESP-IDF modular, com abstração de hardware por componente, documentação Doxygen e uma camada própria para isolar o uso direto do RTOS.
 
@@ -18,7 +18,7 @@ O projeto foi estruturado como uma aplicação ESP-IDF modular, com abstração 
 - Conversão dos comandos em PWM de 50 Hz para dois servomotores.
 - Movimento proporcional e suavizado da mesa.
 - Organização em três tarefas, conforme requisito da entrega.
-- Logs seriais para debug e LED de inicialização concluída.
+- Logs seriais para debug.
 
 ## Arquitetura
 
@@ -28,7 +28,6 @@ main
     ├── bsp_board
     ├── bsp_joystick
     ├── bsp_servo
-    ├── bsp_status_led
     └── rtos_port
 ```
 
@@ -39,7 +38,6 @@ main
 | `bsp_board` | Centraliza pinagem, canais ADC e configuração comum de board. |
 | `bsp_joystick` | Encapsula ADC, filtro EMA, zona morta e curva de resposta. |
 | `bsp_servo` | Encapsula LEDC/PWM e mapeia comando percentual para pulso de servo. |
-| `bsp_status_led` | Encapsula o GPIO do LED de pronto. |
 | `rtos_port` | Interface de abstração para tarefas, filas e delays do FreeRTOS. |
 
 Mais detalhes estão em [docs/architecture.md](docs/architecture.md).
@@ -64,7 +62,7 @@ joystick_task
 | --- | ---: | --- | --- |
 | `joystick_task` | 5 | Lê joystick X/Y, filtra e publica amostras processadas. | 50 Hz |
 | `servo_task` | 4 | Atualiza os dois servos a partir do comando mais recente. | Sob demanda |
-| `status_task` | 3 | Liga o LED de pronto e emite logs seriais de status. | A cada 25 amostras |
+| `status_task` | 3 | Emite logs seriais de status. | A cada 25 amostras |
 
 ## Hardware
 
@@ -74,7 +72,6 @@ joystick_task
 | Joystick Y | GPIO33 / ADC1_CH5 | Entrada analógica do eixo Y |
 | Servo X | GPIO18 | PWM 50 Hz para inclinação no eixo X |
 | Servo Y | GPIO19 | PWM 50 Hz para inclinação no eixo Y |
-| LED de pronto | GPIO2 | Indicação de inicialização concluída |
 
 A pinagem fica centralizada em `components/bsp_board/include/bsp_board.h`, facilitando ajustes de montagem sem alterar a lógica da aplicação.
 
@@ -123,7 +120,6 @@ docs/doxygen/html
 │   ├── bsp_board
 │   ├── bsp_joystick
 │   ├── bsp_servo
-│   ├── bsp_status_led
 │   └── rtos_port
 ├── docs
 │   └── architecture.md

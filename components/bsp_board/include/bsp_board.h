@@ -9,7 +9,6 @@
 #pragma once
 
 #include "driver/gpio.h"
-#include "driver/ledc.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_err.h"
 
@@ -17,32 +16,17 @@
 extern "C" {
 #endif
 
-/** ADC channel connected to joystick X axis. ESP32 ADC1 channel 4 is GPIO32. */
-#define BSP_JOYSTICK_X_CHANNEL ADC_CHANNEL_4
+/** ADC channel connected to joystick X axis. */
+#define BSP_JOYSTICK_X_CHANNEL ADC_CHANNEL_6
 
-/** ADC channel connected to joystick Y axis. ESP32 ADC1 channel 5 is GPIO33. */
-#define BSP_JOYSTICK_Y_CHANNEL ADC_CHANNEL_5
+/** ADC channel connected to joystick Y axis. */
+#define BSP_JOYSTICK_Y_CHANNEL ADC_CHANNEL_8
 
 /** GPIO that drives the X-axis servo PWM signal. */
-#define BSP_SERVO_X_GPIO GPIO_NUM_18
+#define BSP_SERVO_X_GPIO GPIO_NUM_4
 
 /** GPIO that drives the Y-axis servo PWM signal. */
-#define BSP_SERVO_Y_GPIO GPIO_NUM_19
-
-/** GPIO used by the "system ready" status LED. */
-#define BSP_STATUS_LED_GPIO GPIO_NUM_2
-
-/** LEDC timer used by both servo PWM channels. */
-#define BSP_SERVO_LEDC_TIMER LEDC_TIMER_0
-
-/** LEDC speed mode used by the servo PWM channels. */
-#define BSP_SERVO_LEDC_MODE LEDC_LOW_SPEED_MODE
-
-/** LEDC channel assigned to the X-axis servo. */
-#define BSP_SERVO_X_LEDC_CHANNEL LEDC_CHANNEL_0
-
-/** LEDC channel assigned to the Y-axis servo. */
-#define BSP_SERVO_Y_LEDC_CHANNEL LEDC_CHANNEL_1
+#define BSP_SERVO_Y_GPIO GPIO_NUM_5
 
 /**
  * @brief Initialize basic board services.

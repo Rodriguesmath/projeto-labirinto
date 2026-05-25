@@ -6,6 +6,9 @@
 #include "bsp_board.h"
 #include "esp_check.h"
 
+#define ADC_SAMPLE_COUNT 9U
+#define ADC_TRIM_COUNT 2U
+
 static int clamp_percent(int value)
 {
     if (value > 100) {
@@ -42,6 +45,38 @@ static float filter_axis(const bsp_joystick_config_t *config, float previous, in
     return (alpha * (float)raw) + ((1.0f - alpha) * previous);
 }
 
+static void sort_samples(int *samples, size_t count)
+{
+    for (size_t i = 1; i < count; i++) {
+        const int value = samples[i];
+        size_t j = i;
+        while (j > 0 && samples[j - 1] > value) {
+            samples[j] = samples[j - 1];
+            j--;
+        }
+        samples[j] = value;
+    }
+}
+
+static esp_err_t read_filtered_raw(adc_oneshot_unit_handle_t handle, adc_channel_t channel, int *raw_out)
+{
+    int samples[ADC_SAMPLE_COUNT] = {0};
+
+    for (size_t i = 0; i < ADC_SAMPLE_COUNT; i++) {
+        ESP_RETURN_ON_ERROR(adc_oneshot_read(handle, channel, &samples[i]), "bsp_joystick", "read filtered");
+    }
+
+    sort_samples(samples, ADC_SAMPLE_COUNT);
+
+    int total = 0;
+    for (size_t i = ADC_TRIM_COUNT; i < ADC_SAMPLE_COUNT - ADC_TRIM_COUNT; i++) {
+        total += samples[i];
+    }
+
+    *raw_out = total / (int)(ADC_SAMPLE_COUNT - (2U * ADC_TRIM_COUNT));
+    return ESP_OK;
+}
+
 bsp_joystick_config_t bsp_joystick_default_config(void)
 {
     return (bsp_joystick_config_t) {
@@ -51,9 +86,9 @@ bsp_joystick_config_t bsp_joystick_default_config(void)
         .max_raw = 4095,
         .center_raw = 1950,
         .deadzone_raw = 100,
-        .alpha_slow = 0.05f,
-        .alpha_fast = 0.50f,
-        .fast_threshold_raw = 100,
+        .alpha_slow = 0.03f,
+        .alpha_fast = 0.25f,
+        .fast_threshold_raw = 250,
     };
 }
 
@@ -93,9 +128,9 @@ esp_err_t bsp_joystick_read(bsp_joystick_t *joystick, bsp_joystick_sample_t *sam
 
     int x_raw = 0;
     int y_raw = 0;
-    ESP_RETURN_ON_ERROR(adc_oneshot_read(joystick->adc_handle, joystick->config.x_channel, &x_raw),
+    ESP_RETURN_ON_ERROR(read_filtered_raw(joystick->adc_handle, joystick->config.x_channel, &x_raw),
                         "bsp_joystick", "read x");
-    ESP_RETURN_ON_ERROR(adc_oneshot_read(joystick->adc_handle, joystick->config.y_channel, &y_raw),
+    ESP_RETURN_ON_ERROR(read_filtered_raw(joystick->adc_handle, joystick->config.y_channel, &y_raw),
                         "bsp_joystick", "read y");
 
     if (!joystick->filter_initialized) {

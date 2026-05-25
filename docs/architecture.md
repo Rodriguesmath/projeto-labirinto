@@ -13,7 +13,6 @@ A camada BSP isola detalhes da ESP-IDF e do hardware:
 - `bsp_board`: pinout e constantes elétricas.
 - `bsp_joystick`: ADC oneshot, filtro EMA, zona morta e normalização.
 - `bsp_servo`: LEDC 50 Hz e conversão de percentual para pulso de servo.
-- `bsp_status_led`: GPIO do LED de pronto.
 
 ### Porta RTOS
 
@@ -25,7 +24,7 @@ A camada BSP isola detalhes da ESP-IDF e do hardware:
 
 1. `joystick_task` publica amostras processadas.
 2. `servo_task` consome amostras e atualiza os atuadores.
-3. `status_task` consome amostras de debug, liga o LED e registra logs seriais.
+3. `status_task` consome amostras de debug e registra logs seriais.
 
 ## Fluxo de dados
 
