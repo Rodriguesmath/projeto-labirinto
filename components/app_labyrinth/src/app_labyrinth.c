@@ -53,6 +53,11 @@ typedef struct {
     int servo_y_target_tenths;
 } app_labyrinth_context_t;
 
+typedef struct {
+    uint32_t stable_sample_count;
+    bool pulse_relaxed;
+} servo_relax_state_t;
+
 static app_labyrinth_context_t s_app;
 
 static esp_err_t create_queue(rtos_queue_handle_t *queue, size_t length, size_t item_size)
@@ -96,6 +101,37 @@ static int clamp_servo_output(int percent_tenths)
 static bool servo_can_relax(int current_percent_tenths, int target_percent_tenths)
 {
     return current_percent_tenths == 0 && target_percent_tenths == 0;
+}
+
+static void update_servo_relax(bsp_servo_t *servo,
+                               int current_percent_tenths,
+                               int target_percent_tenths,
+                               bool wrote,
+                               servo_relax_state_t *state)
+{
+#if SERVO_RELAX_ENABLED
+    if (wrote || !servo_can_relax(current_percent_tenths, target_percent_tenths)) {
+        state->stable_sample_count = 0;
+        state->pulse_relaxed = false;
+        return;
+    }
+
+    if (state->pulse_relaxed) {
+        return;
+    }
+
+    state->stable_sample_count++;
+    if (state->stable_sample_count >= SERVO_RELAX_AFTER_STABLE_SAMPLES) {
+        ESP_ERROR_CHECK_WITHOUT_ABORT(bsp_servo_set_pulse_enabled(servo, false));
+        state->pulse_relaxed = !servo->pulse_enabled;
+    }
+#else
+    (void)servo;
+    (void)current_percent_tenths;
+    (void)target_percent_tenths;
+    (void)wrote;
+    (void)state;
+#endif
 }
 
 static char tenths_sign(int value)
@@ -186,10 +222,8 @@ static void servo_task(void *arg)
     int current_y_percent = 0;
     int target_x_percent = 0;
     int target_y_percent = 0;
-    uint32_t stable_x_sample_count = 0;
-    uint32_t stable_y_sample_count = 0;
-    bool pulse_x_relaxed = false;
-    bool pulse_y_relaxed = false;
+    servo_relax_state_t x_relax = {0};
+    servo_relax_state_t y_relax = {0};
 
     while (true) {
         bsp_joystick_sample_t sample = {0};
@@ -222,34 +256,8 @@ static void servo_task(void *arg)
                 wrote_y = true;
             }
 
-#if SERVO_RELAX_ENABLED
-            if (wrote_x || !servo_can_relax(current_x_percent, target_x_percent)) {
-                stable_x_sample_count = 0;
-                pulse_x_relaxed = false;
-            } else if (!pulse_x_relaxed) {
-                stable_x_sample_count++;
-                if (stable_x_sample_count >= SERVO_RELAX_AFTER_STABLE_SAMPLES) {
-                    ESP_ERROR_CHECK_WITHOUT_ABORT(bsp_servo_set_pulse_enabled(&ctx->servo_x, false));
-                    pulse_x_relaxed = true;
-                }
-            }
-
-            if (wrote_y || !servo_can_relax(current_y_percent, target_y_percent)) {
-                stable_y_sample_count = 0;
-                pulse_y_relaxed = false;
-            } else if (!pulse_y_relaxed) {
-                stable_y_sample_count++;
-                if (stable_y_sample_count >= SERVO_RELAX_AFTER_STABLE_SAMPLES) {
-                    ESP_ERROR_CHECK_WITHOUT_ABORT(bsp_servo_set_pulse_enabled(&ctx->servo_y, false));
-                    pulse_y_relaxed = true;
-                }
-            }
-#else
-            (void)stable_x_sample_count;
-            (void)stable_y_sample_count;
-            (void)pulse_x_relaxed;
-            (void)pulse_y_relaxed;
-#endif
+            update_servo_relax(&ctx->servo_x, current_x_percent, target_x_percent, wrote_x, &x_relax);
+            update_servo_relax(&ctx->servo_y, current_y_percent, target_y_percent, wrote_y, &y_relax);
 
 #if SERVO_OUTPUT_LOG_ENABLED
             if (wrote_x || wrote_y) {
@@ -318,7 +326,7 @@ static void status_task(void *arg)
         sample_count++;
         if (sample_count >= DEBUG_PRINT_EVERY_SAMPLES) {
             ESP_LOGI(TAG,
-                     "joy_raw=(%4d,%4d) joy_cmd=(%c%3d.%1d%%,%c%3d.%1d%%) servo_target=(%c%3d.%1d%%,%c%3d.%1d%%) servo_current=(%c%3d.%1d%%,%c%3d.%1d%%) servo_pulse=(%4lu,%4lu)us",
+                     "joy_raw=(%4d,%4d) joy_cmd=(%c%3d.%1d%%,%c%3d.%1d%%) servo_target=(%c%3d.%1d%%,%c%3d.%1d%%) servo_current=(%c%3d.%1d%%,%c%3d.%1d%%) servo_pulse=(%4lu,%4lu)us servo_pwm=(%s,%s)",
                      sample.x_raw,
                      sample.y_raw,
                      tenths_sign(sample.x_percent_tenths),
@@ -340,7 +348,9 @@ static void status_task(void *arg)
                      tenths_whole_abs(ctx->servo_y_current_tenths),
                      tenths_fraction_abs(ctx->servo_y_current_tenths),
                      (unsigned long)ctx->servo_x.last_pulse_us,
-                     (unsigned long)ctx->servo_y.last_pulse_us);
+                     (unsigned long)ctx->servo_y.last_pulse_us,
+                     ctx->servo_x.pulse_enabled ? "on" : "off",
+                     ctx->servo_y.pulse_enabled ? "on" : "off");
             sample_count = 0;
         }
     }
@@ -361,6 +371,10 @@ esp_err_t app_labyrinth_start(void)
     ESP_RETURN_ON_ERROR(bsp_servo_write_tenths_percent(&s_app.servo_x, 0), TAG, "servo x center");
     ESP_RETURN_ON_ERROR(bsp_servo_write_tenths_percent(&s_app.servo_y, 0), TAG, "servo y center");
     rtos_delay_ms(SERVO_STARTUP_CENTER_HOLD_MS);
+#if SERVO_RELAX_ENABLED
+    ESP_RETURN_ON_ERROR(bsp_servo_set_pulse_enabled(&s_app.servo_x, false), TAG, "servo x startup relax");
+    ESP_RETURN_ON_ERROR(bsp_servo_set_pulse_enabled(&s_app.servo_y, false), TAG, "servo y startup relax");
+#endif
 
     const bsp_mpu6050_config_t mpu6050_config = bsp_mpu6050_default_config();
     ESP_RETURN_ON_ERROR(bsp_mpu6050_init(&s_app.mpu6050, &mpu6050_config), TAG, "mpu6050 init");

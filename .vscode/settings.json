@@ -7,5 +7,5 @@
     "OPENOCD_SCRIPTS": "/home/Rodrigues/.espressif/tools/openocd-esp32/v0.12.0-esp32-20240318/openocd-esp32/share/openocd/scripts",
     "IDF_TARGET": "esp32s3"
   },
-  "idf.port": "/dev/ttyACM1"
+  "idf.port": "/dev/ttyACM2"
 }
