@@ -20,7 +20,7 @@ extern "C" {
 #define BSP_JOYSTICK_X_CHANNEL ADC_CHANNEL_6
 
 /** ADC channel connected to joystick Y axis. */
-#define BSP_JOYSTICK_Y_CHANNEL ADC_CHANNEL_8
+#define BSP_JOYSTICK_Y_CHANNEL ADC_CHANNEL_7
 
 /** Raw ADC value measured when the joystick X axis is physically centered. */
 #define BSP_JOYSTICK_X_CENTER_RAW 1873
