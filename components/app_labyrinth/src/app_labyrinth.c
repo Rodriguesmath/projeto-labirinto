@@ -1,37 +1,45 @@
 #include "app_labyrinth.h"
 
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "bsp_board.h"
 #include "bsp_joystick.h"
+#include "bsp_mpu6050.h"
 #include "bsp_servo.h"
 #include "esp_check.h"
 #include "esp_log.h"
 #include "rtos_port.h"
 
 #define JOYSTICK_PERIOD_MS 20U
+#define MPU6050_PERIOD_MS 20U
 #define SERVO_QUEUE_LENGTH 4U
 #define DEBUG_QUEUE_LENGTH 8U
 #define TASK_STACK_BYTES 3072U
+#define MPU6050_TASK_STACK_BYTES 4096U
 #define JOYSTICK_TASK_PRIORITY 5U
 #define SERVO_TASK_PRIORITY 4U
+#define MPU6050_TASK_PRIORITY 4U
 #define STATUS_TASK_PRIORITY 3U
 #define DEBUG_PRINT_EVERY_SAMPLES 25U
 #define SERVO_IDLE_DELAY_MS 1U
-#define SERVO_SCALE 10
-#define SERVO_MAX_VELOCITY 40
-#define SERVO_ACCEL 8
-#define SERVO_TARGET_DEADBAND 15
+#define SERVO_MAX_VELOCITY 12
+#define SERVO_ACCEL 2
+#define SERVO_CENTER_MAX_VELOCITY 7
+#define SERVO_CENTER_ACCEL 1
+#define SERVO_TARGET_DEADBAND 2
 #define SERVO_OUTPUT_MAX 150
 #define SERVO_OUTPUT_MIN -150
 #define SERVO_OUTPUT_LOG_ENABLED 0
 #define SERVO_RELAX_AFTER_STABLE_SAMPLES 3U
+#define SERVO_STARTUP_CENTER_HOLD_MS 800U
 
 static const char *TAG = "app_labyrinth";
 
 typedef struct {
     bsp_joystick_t joystick;
+    bsp_mpu6050_t mpu6050;
     bsp_servo_t servo_x;
     bsp_servo_t servo_y;
     rtos_queue_handle_t servo_queue;
@@ -78,7 +86,7 @@ static int sign_int(int value)
     return 0;
 }
 
-static int motion_step_percent(int current, int target, int *velocity)
+static int motion_step_percent(int current, int target, int *velocity, int max_velocity, int accel)
 {
     const int delta = target - current;
     if (delta == 0) {
@@ -86,10 +94,10 @@ static int motion_step_percent(int current, int target, int *velocity)
         return current;
     }
 
-    const int braking_velocity = integer_sqrt(2 * SERVO_ACCEL * abs(delta));
-    const int desired_speed = (braking_velocity > SERVO_MAX_VELOCITY) ? SERVO_MAX_VELOCITY : braking_velocity;
+    const int braking_velocity = integer_sqrt(2 * accel * abs(delta));
+    const int desired_speed = (braking_velocity > max_velocity) ? max_velocity : braking_velocity;
     const int desired_velocity = sign_int(delta) * desired_speed;
-    *velocity = approach_int(*velocity, desired_velocity, SERVO_ACCEL);
+    *velocity = approach_int(*velocity, desired_velocity, accel);
 
     if (abs(delta) <= abs(*velocity)) {
         *velocity = 0;
@@ -99,9 +107,23 @@ static int motion_step_percent(int current, int target, int *velocity)
     return current + *velocity;
 }
 
+static int motion_step_for_target(int current, int target, int *velocity)
+{
+    const bool returning_to_center = (target == 0);
+    const int max_velocity = returning_to_center ? SERVO_CENTER_MAX_VELOCITY : SERVO_MAX_VELOCITY;
+    const int accel = returning_to_center ? SERVO_CENTER_ACCEL : SERVO_ACCEL;
+
+    return motion_step_percent(current, target, velocity, max_velocity, accel);
+}
+
 static int update_servo_target(int current_target, int requested)
 {
     return (abs(requested - current_target) < SERVO_TARGET_DEADBAND) ? current_target : requested;
+}
+
+static bool target_reversed(int previous_target, int next_target)
+{
+    return previous_target != 0 && next_target != 0 && sign_int(previous_target) != sign_int(next_target);
 }
 
 static int clamp_servo_output(int percent_tenths)
@@ -113,6 +135,26 @@ static int clamp_servo_output(int percent_tenths)
         return SERVO_OUTPUT_MIN;
     }
     return percent_tenths;
+}
+
+static bool servo_can_relax(int current_percent_tenths, int target_percent_tenths)
+{
+    return current_percent_tenths == 0 && target_percent_tenths == 0;
+}
+
+static char tenths_sign(int value)
+{
+    return (value < 0) ? '-' : ' ';
+}
+
+static int tenths_whole_abs(int value)
+{
+    return abs(value) / 10;
+}
+
+static int tenths_fraction_abs(int value)
+{
+    return abs(value) % 10;
 }
 
 static void joystick_task(void *arg)
@@ -130,6 +172,37 @@ static void joystick_task(void *arg)
         }
 
         rtos_delay_ms(JOYSTICK_PERIOD_MS);
+    }
+}
+
+static void mpu6050_task(void *arg)
+{
+    app_labyrinth_context_t *ctx = (app_labyrinth_context_t *)arg;
+
+    while (true) {
+        bsp_mpu6050_sample_t sample = {0};
+        const esp_err_t err = bsp_mpu6050_read(&ctx->mpu6050, &sample);
+        if (err == ESP_OK) {
+            printf("{\"sensor\":\"mpu6050\",\"pitch_x_deg\":%.2f,\"roll_y_deg\":%.2f,"
+                   "\"accel_pitch_deg\":%.2f,\"accel_roll_deg\":%.2f,\"dt_ms\":%.1f,"
+                   "\"accel_g\":{\"x\":%.3f,\"y\":%.3f,\"z\":%.3f},"
+                   "\"gyro_dps\":{\"x\":%.2f,\"y\":%.2f,\"z\":%.2f}}\n",
+                   sample.pitch_deg,
+                   sample.roll_deg,
+                   sample.accel_pitch_deg,
+                   sample.accel_roll_deg,
+                   sample.dt_s * 1000.0f,
+                   sample.accel_x_g,
+                   sample.accel_y_g,
+                   sample.accel_z_g,
+                   sample.gyro_x_dps,
+                   sample.gyro_y_dps,
+                   sample.gyro_z_dps);
+        } else {
+            ESP_LOGW(TAG, "Falha na leitura do MPU6050: %s", esp_err_to_name(err));
+        }
+
+        rtos_delay_ms(MPU6050_PERIOD_MS);
     }
 }
 
@@ -152,16 +225,26 @@ static void servo_task(void *arg)
         if (rtos_queue_receive(ctx->servo_queue, &sample, RTOS_WAIT_FOREVER) == RTOS_OK) {
             const int previous_x_percent = current_x_percent;
             const int previous_y_percent = current_y_percent;
-            const int requested_x_percent = clamp_servo_output(sample.x_percent * SERVO_SCALE);
-            const int requested_y_percent = clamp_servo_output(sample.y_percent * SERVO_SCALE);
+            const int requested_x_percent = clamp_servo_output(sample.x_percent_tenths);
+            const int requested_y_percent = clamp_servo_output(-sample.y_percent_tenths);
+            const int previous_target_x_percent = target_x_percent;
+            const int previous_target_y_percent = target_y_percent;
             target_x_percent = update_servo_target(target_x_percent, requested_x_percent);
             target_y_percent = update_servo_target(target_y_percent, requested_y_percent);
-            const int next_x_percent = motion_step_percent(current_x_percent,
-                                                           target_x_percent,
-                                                           &velocity_x_percent);
-            const int next_y_percent = motion_step_percent(current_y_percent,
-                                                           target_y_percent,
-                                                           &velocity_y_percent);
+
+            if (target_reversed(previous_target_x_percent, target_x_percent)) {
+                velocity_x_percent = 0;
+            }
+            if (target_reversed(previous_target_y_percent, target_y_percent)) {
+                velocity_y_percent = 0;
+            }
+
+            const int next_x_percent = motion_step_for_target(current_x_percent,
+                                                              target_x_percent,
+                                                              &velocity_x_percent);
+            const int next_y_percent = motion_step_for_target(current_y_percent,
+                                                              target_y_percent,
+                                                              &velocity_y_percent);
             bool wrote_x = false;
             bool wrote_y = false;
 
@@ -177,7 +260,7 @@ static void servo_task(void *arg)
                 wrote_y = true;
             }
 
-            if (wrote_x) {
+            if (wrote_x || !servo_can_relax(current_x_percent, target_x_percent)) {
                 stable_x_sample_count = 0;
                 pulse_x_relaxed = false;
             } else if (!pulse_x_relaxed) {
@@ -188,7 +271,7 @@ static void servo_task(void *arg)
                 }
             }
 
-            if (wrote_y) {
+            if (wrote_y || !servo_can_relax(current_y_percent, target_y_percent)) {
                 stable_y_sample_count = 0;
                 pulse_y_relaxed = false;
             } else if (!pulse_y_relaxed) {
@@ -202,19 +285,39 @@ static void servo_task(void *arg)
 #if SERVO_OUTPUT_LOG_ENABLED
             if (wrote_x || wrote_y) {
                 ESP_LOGI(TAG,
-                         "servo_out raw=(%4d,%4d) joy_cmd=(%4d%%,%4d%%) request=(%4d%%,%4d%%) target=(%4d%%,%4d%%) prev=(%4d%%,%4d%%) pwm=(%4d%%,%4d%%) write=(%d,%d)",
+                         "servo_out raw=(%4d,%4d) joy_cmd=(%c%3d.%1d%%,%c%3d.%1d%%) request=(%c%3d.%1d%%,%c%3d.%1d%%) target=(%c%3d.%1d%%,%c%3d.%1d%%) prev=(%c%3d.%1d%%,%c%3d.%1d%%) pwm=(%c%3d.%1d%%,%c%3d.%1d%%) write=(%d,%d)",
                          sample.x_raw,
                          sample.y_raw,
-                         sample.x_percent,
-                         sample.y_percent,
-                         requested_x_percent,
-                         requested_y_percent,
-                         target_x_percent,
-                         target_y_percent,
-                         previous_x_percent,
-                         previous_y_percent,
-                         current_x_percent,
-                         current_y_percent,
+                         tenths_sign(sample.x_percent_tenths),
+                         tenths_whole_abs(sample.x_percent_tenths),
+                         tenths_fraction_abs(sample.x_percent_tenths),
+                         tenths_sign(sample.y_percent_tenths),
+                         tenths_whole_abs(sample.y_percent_tenths),
+                         tenths_fraction_abs(sample.y_percent_tenths),
+                         tenths_sign(requested_x_percent),
+                         tenths_whole_abs(requested_x_percent),
+                         tenths_fraction_abs(requested_x_percent),
+                         tenths_sign(requested_y_percent),
+                         tenths_whole_abs(requested_y_percent),
+                         tenths_fraction_abs(requested_y_percent),
+                         tenths_sign(target_x_percent),
+                         tenths_whole_abs(target_x_percent),
+                         tenths_fraction_abs(target_x_percent),
+                         tenths_sign(target_y_percent),
+                         tenths_whole_abs(target_y_percent),
+                         tenths_fraction_abs(target_y_percent),
+                         tenths_sign(previous_x_percent),
+                         tenths_whole_abs(previous_x_percent),
+                         tenths_fraction_abs(previous_x_percent),
+                         tenths_sign(previous_y_percent),
+                         tenths_whole_abs(previous_y_percent),
+                         tenths_fraction_abs(previous_y_percent),
+                         tenths_sign(current_x_percent),
+                         tenths_whole_abs(current_x_percent),
+                         tenths_fraction_abs(current_x_percent),
+                         tenths_sign(current_y_percent),
+                         tenths_whole_abs(current_y_percent),
+                         tenths_fraction_abs(current_y_percent),
                          wrote_x,
                          wrote_y);
             }
@@ -246,11 +349,17 @@ static void status_task(void *arg)
         sample_count++;
         if (sample_count >= DEBUG_PRINT_EVERY_SAMPLES) {
             ESP_LOGI(TAG,
-                     "joy_raw=(%4d,%4d) joy_cmd=(%4d%%,%4d%%)",
+                     "joy_raw=(%4d,%4d) joy_cmd=(%c%3d.%1d%%,%c%3d.%1d%%) servo_pulse=(%4lu,%4lu)us",
                      sample.x_raw,
                      sample.y_raw,
-                     sample.x_percent,
-                     sample.y_percent);
+                     tenths_sign(sample.x_percent_tenths),
+                     tenths_whole_abs(sample.x_percent_tenths),
+                     tenths_fraction_abs(sample.x_percent_tenths),
+                     tenths_sign(sample.y_percent_tenths),
+                     tenths_whole_abs(sample.y_percent_tenths),
+                     tenths_fraction_abs(sample.y_percent_tenths),
+                     (unsigned long)ctx->servo_x.last_pulse_us,
+                     (unsigned long)ctx->servo_y.last_pulse_us);
             sample_count = 0;
         }
     }
@@ -268,6 +377,12 @@ esp_err_t app_labyrinth_start(void)
     const bsp_servo_channel_config_t servo_y_config = bsp_servo_y_default_config();
     ESP_RETURN_ON_ERROR(bsp_servo_init(&s_app.servo_x, &servo_x_config), TAG, "servo x init");
     ESP_RETURN_ON_ERROR(bsp_servo_init(&s_app.servo_y, &servo_y_config), TAG, "servo y init");
+    ESP_RETURN_ON_ERROR(bsp_servo_write_tenths_percent(&s_app.servo_x, 0), TAG, "servo x center");
+    ESP_RETURN_ON_ERROR(bsp_servo_write_tenths_percent(&s_app.servo_y, 0), TAG, "servo y center");
+    rtos_delay_ms(SERVO_STARTUP_CENTER_HOLD_MS);
+
+    const bsp_mpu6050_config_t mpu6050_config = bsp_mpu6050_default_config();
+    ESP_RETURN_ON_ERROR(bsp_mpu6050_init(&s_app.mpu6050, &mpu6050_config), TAG, "mpu6050 init");
 
     ESP_RETURN_ON_ERROR(create_queue(&s_app.servo_queue, SERVO_QUEUE_LENGTH, sizeof(bsp_joystick_sample_t)),
                         TAG, "servo queue");
@@ -288,6 +403,13 @@ esp_err_t app_labyrinth_start(void)
         .stack_size_bytes = TASK_STACK_BYTES,
         .priority = SERVO_TASK_PRIORITY,
     };
+    const rtos_task_config_t mpu6050_task_config = {
+        .name = "mpu6050_task",
+        .entry = mpu6050_task,
+        .arg = &s_app,
+        .stack_size_bytes = MPU6050_TASK_STACK_BYTES,
+        .priority = MPU6050_TASK_PRIORITY,
+    };
     const rtos_task_config_t status_task_config = {
         .name = "status_task",
         .entry = status_task,
@@ -298,6 +420,7 @@ esp_err_t app_labyrinth_start(void)
 
     if (rtos_task_create(&joystick_task_config, NULL) != RTOS_OK ||
         rtos_task_create(&servo_task_config, NULL) != RTOS_OK ||
+        rtos_task_create(&mpu6050_task_config, NULL) != RTOS_OK ||
         rtos_task_create(&status_task_config, NULL) != RTOS_OK) {
         return ESP_ERR_NO_MEM;
     }

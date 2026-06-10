@@ -5,13 +5,17 @@
 
 #define SERVO_TIMER_RESOLUTION_HZ 1000000U
 #define SERVO_PWM_PERIOD_US 20000U
-#define MAX_PERCENT_TENTHS 150
-#define MIN_PERCENT_TENTHS -150
-#define SERVO_PULSE_DEADBAND_US 4U
+#define MAX_PERCENT 15
+#define MIN_PERCENT -15
+#define MAX_PERCENT_TENTHS (MAX_PERCENT * 10)
+#define MIN_PERCENT_TENTHS (MIN_PERCENT * 10)
+#define SERVO_PULSE_DEADBAND_US 2U
+#define SERVO_X_CENTER_PULSE_US 1441U
+#define SERVO_Y_CENTER_PULSE_US 1409U
 
 static mcpwm_timer_handle_t s_servo_timer;
 
-static int clamp_tenths_percent(int percent_tenths)
+static int clamp_percent_tenths(int percent_tenths)
 {
     if (percent_tenths > 1000) {
         return 1000;
@@ -22,9 +26,9 @@ static int clamp_tenths_percent(int percent_tenths)
     return percent_tenths;
 }
 
-static uint32_t tenths_percent_to_pulse_us(const bsp_servo_channel_config_t *config, int percent_tenths)
+static uint32_t percent_tenths_to_pulse_us(const bsp_servo_channel_config_t *config, int percent_tenths)
 {
-    percent_tenths = clamp_tenths_percent(percent_tenths);
+    percent_tenths = clamp_percent_tenths(percent_tenths);
     if (percent_tenths >= 0) {
         const uint32_t span = config->max_pulse_us - config->center_pulse_us;
         return config->center_pulse_us + ((uint32_t)percent_tenths * span) / 1000U;
@@ -39,7 +43,7 @@ bsp_servo_channel_config_t bsp_servo_x_default_config(void)
     return (bsp_servo_channel_config_t) {
         .gpio = BSP_SERVO_X_GPIO,
         .min_pulse_us = 500,
-        .center_pulse_us = 1500,
+        .center_pulse_us = SERVO_X_CENTER_PULSE_US,
         .max_pulse_us = 2500,
     };
 }
@@ -49,7 +53,7 @@ bsp_servo_channel_config_t bsp_servo_y_default_config(void)
     return (bsp_servo_channel_config_t) {
         .gpio = BSP_SERVO_Y_GPIO,
         .min_pulse_us = 500,
-        .center_pulse_us = 1500,
+        .center_pulse_us = SERVO_Y_CENTER_PULSE_US,
         .max_pulse_us = 2500,
     };
 }
@@ -149,6 +153,11 @@ esp_err_t bsp_servo_set_pulse_enabled(bsp_servo_t *servo, bool enabled)
     return ESP_OK;
 }
 
+esp_err_t bsp_servo_write_percent(bsp_servo_t *servo, int percent)
+{
+    return bsp_servo_write_tenths_percent(servo, percent * 10);
+}
+
 esp_err_t bsp_servo_write_tenths_percent(bsp_servo_t *servo, int percent_tenths)
 {
     if (servo == NULL) {
@@ -161,7 +170,7 @@ esp_err_t bsp_servo_write_tenths_percent(bsp_servo_t *servo, int percent_tenths)
         percent_tenths = MIN_PERCENT_TENTHS;
     }
 
-    const uint32_t pulse_us = tenths_percent_to_pulse_us(&servo->config, percent_tenths);
+    const uint32_t pulse_us = percent_tenths_to_pulse_us(&servo->config, percent_tenths);
     ESP_RETURN_ON_ERROR(bsp_servo_set_pulse_enabled(servo, true),
                         "bsp_servo", "enable pulse");
 
@@ -181,9 +190,4 @@ esp_err_t bsp_servo_write_tenths_percent(bsp_servo_t *servo, int percent_tenths)
     servo->command_initialized = true;
 
     return ESP_OK;
-}
-
-esp_err_t bsp_servo_write_percent(bsp_servo_t *servo, int percent)
-{
-    return bsp_servo_write_tenths_percent(servo, percent * 10);
 }

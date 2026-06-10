@@ -9,33 +9,33 @@
 #define ADC_SAMPLE_COUNT 9U
 #define ADC_TRIM_COUNT 2U
 
-static int clamp_percent(int value)
+static int clamp_percent_tenths(int value)
 {
-    if (value > 100) {
-        return 100;
+    if (value > 1000) {
+        return 1000;
     }
-    if (value < -100) {
-        return -100;
+    if (value < -1000) {
+        return -1000;
     }
     return value;
 }
 
-static int process_axis(const bsp_joystick_config_t *config, int raw)
+static int process_axis(const bsp_joystick_config_t *config, int raw, int center_raw)
 {
-    if (abs(raw - config->center_raw) <= config->deadzone_raw) {
+    if (abs(raw - center_raw) <= config->deadzone_raw) {
         return 0;
     }
 
     float normalized = 0.0f;
-    if (raw < config->center_raw) {
-        const int usable_low = config->center_raw - config->deadzone_raw - config->min_raw;
-        normalized = (float)(config->center_raw - config->deadzone_raw - raw) / (float)usable_low;
-        return clamp_percent((int)(-100.0f * normalized * normalized * normalized));
+    if (raw < center_raw) {
+        const int usable_low = center_raw - config->deadzone_raw - config->min_raw;
+        normalized = (float)(center_raw - config->deadzone_raw - raw) / (float)usable_low;
+        return clamp_percent_tenths((int)(-1000.0f * normalized));
     }
 
-    const int usable_high = config->max_raw - (config->center_raw + config->deadzone_raw);
-    normalized = (float)(raw - (config->center_raw + config->deadzone_raw)) / (float)usable_high;
-    return clamp_percent((int)(100.0f * normalized * normalized * normalized));
+    const int usable_high = config->max_raw - (center_raw + config->deadzone_raw);
+    normalized = (float)(raw - (center_raw + config->deadzone_raw)) / (float)usable_high;
+    return clamp_percent_tenths((int)(1000.0f * normalized));
 }
 
 static float filter_axis(const bsp_joystick_config_t *config, float previous, int raw)
@@ -84,7 +84,8 @@ bsp_joystick_config_t bsp_joystick_default_config(void)
         .y_channel = BSP_JOYSTICK_Y_CHANNEL,
         .min_raw = 0,
         .max_raw = 4095,
-        .center_raw = 1950,
+        .x_center_raw = BSP_JOYSTICK_X_CENTER_RAW,
+        .y_center_raw = BSP_JOYSTICK_Y_CENTER_RAW,
         .deadzone_raw = 100,
         .alpha_slow = 0.03f,
         .alpha_fast = 0.25f,
@@ -142,11 +143,20 @@ esp_err_t bsp_joystick_read(bsp_joystick_t *joystick, bsp_joystick_sample_t *sam
         joystick->y_filtered = filter_axis(&joystick->config, joystick->y_filtered, y_raw);
     }
 
+    const int x_percent_tenths = process_axis(&joystick->config,
+                                              (int)joystick->x_filtered,
+                                              joystick->config.x_center_raw);
+    const int y_percent_tenths = process_axis(&joystick->config,
+                                              (int)joystick->y_filtered,
+                                              joystick->config.y_center_raw);
+
     *sample = (bsp_joystick_sample_t) {
         .x_raw = x_raw,
         .y_raw = y_raw,
-        .x_percent = process_axis(&joystick->config, (int)joystick->x_filtered),
-        .y_percent = process_axis(&joystick->config, (int)joystick->y_filtered),
+        .x_percent = x_percent_tenths / 10,
+        .y_percent = y_percent_tenths / 10,
+        .x_percent_tenths = x_percent_tenths,
+        .y_percent_tenths = y_percent_tenths,
     };
 
     return ESP_OK;

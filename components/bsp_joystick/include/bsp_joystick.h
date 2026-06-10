@@ -21,6 +21,8 @@ typedef struct {
     int y_raw;       /**< Raw ADC reading for Y axis. */
     int x_percent;   /**< X axis command after filtering, from -100 to 100. */
     int y_percent;   /**< Y axis command after filtering, from -100 to 100. */
+    int x_percent_tenths;   /**< X axis command after filtering, from -1000 to 1000. */
+    int y_percent_tenths;   /**< Y axis command after filtering, from -1000 to 1000. */
 } bsp_joystick_sample_t;
 
 /** Static joystick driver configuration. */
@@ -29,7 +31,8 @@ typedef struct {
     adc_channel_t y_channel;     /**< ADC channel for Y axis. */
     int min_raw;                 /**< Minimum expected raw ADC value. */
     int max_raw;                 /**< Maximum expected raw ADC value. */
-    int center_raw;              /**< Resting raw ADC value. */
+    int x_center_raw;            /**< Resting raw ADC value for X axis. */
+    int y_center_raw;            /**< Resting raw ADC value for Y axis. */
     int deadzone_raw;            /**< Center deadzone in raw ADC counts. */
     float alpha_slow;            /**< EMA factor used for small variations. */
     float alpha_fast;            /**< EMA factor used for abrupt variations. */
