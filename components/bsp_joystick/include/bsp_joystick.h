@@ -10,7 +10,6 @@
 
 #include "esp_adc/adc_oneshot.h"
 #include "esp_err.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -23,16 +23,16 @@ extern "C" {
 #define BSP_JOYSTICK_Y_CHANNEL ADC_CHANNEL_8
 
 /** Raw ADC value measured when the joystick X axis is physically centered. */
-#define BSP_JOYSTICK_X_CENTER_RAW 2025
+#define BSP_JOYSTICK_X_CENTER_RAW 1873
 
 /** Raw ADC value measured when the joystick Y axis is physically centered. */
-#define BSP_JOYSTICK_Y_CENTER_RAW 1910
+#define BSP_JOYSTICK_Y_CENTER_RAW 1873
 
 /** I2C SDA GPIO connected to the MPU6050. */
-#define BSP_MPU6050_SDA_GPIO GPIO_NUM_10
+#define BSP_MPU6050_SDA_GPIO 35
 
 /** I2C SCL GPIO connected to the MPU6050. */
-#define BSP_MPU6050_SCL_GPIO GPIO_NUM_11
+#define BSP_MPU6050_SCL_GPIO 36
 
 /** GPIO that drives the X-axis servo PWM signal. */
 #define BSP_SERVO_X_GPIO GPIO_NUM_4

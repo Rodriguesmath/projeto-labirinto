@@ -14,6 +14,11 @@
 
 #define JOYSTICK_PERIOD_MS 20U
 #define MPU6050_PERIOD_MS 20U
+#define SERIAL_PRINT_PERIOD_MS 500U
+#define LOG_PRINT_PERIOD_MS 1000U
+#define MPU6050_SERIAL_PRINT_EVERY_SAMPLES (SERIAL_PRINT_PERIOD_MS / MPU6050_PERIOD_MS)
+#define MPU6050_LOG_PRINT_EVERY_SAMPLES (LOG_PRINT_PERIOD_MS / MPU6050_PERIOD_MS)
+#define JOYSTICK_LOG_PRINT_EVERY_SAMPLES (LOG_PRINT_PERIOD_MS / JOYSTICK_PERIOD_MS)
 #define SERVO_QUEUE_LENGTH 4U
 #define DEBUG_QUEUE_LENGTH 8U
 #define TASK_STACK_BYTES 3072U
@@ -22,16 +27,14 @@
 #define SERVO_TASK_PRIORITY 4U
 #define MPU6050_TASK_PRIORITY 4U
 #define STATUS_TASK_PRIORITY 3U
-#define DEBUG_PRINT_EVERY_SAMPLES 25U
+#define DEBUG_PRINT_EVERY_SAMPLES JOYSTICK_LOG_PRINT_EVERY_SAMPLES
 #define SERVO_IDLE_DELAY_MS 1U
-#define SERVO_MAX_VELOCITY 12
-#define SERVO_ACCEL 2
-#define SERVO_CENTER_MAX_VELOCITY 7
-#define SERVO_CENTER_ACCEL 1
+#define SERVO_STEP_TENTHS 8
 #define SERVO_TARGET_DEADBAND 2
 #define SERVO_OUTPUT_MAX 150
 #define SERVO_OUTPUT_MIN -150
 #define SERVO_OUTPUT_LOG_ENABLED 0
+#define SERVO_RELAX_ENABLED 1
 #define SERVO_RELAX_AFTER_STABLE_SAMPLES 3U
 #define SERVO_STARTUP_CENTER_HOLD_MS 800U
 
@@ -44,6 +47,10 @@ typedef struct {
     bsp_servo_t servo_y;
     rtos_queue_handle_t servo_queue;
     rtos_queue_handle_t debug_queue;
+    int servo_x_current_tenths;
+    int servo_y_current_tenths;
+    int servo_x_target_tenths;
+    int servo_y_target_tenths;
 } app_labyrinth_context_t;
 
 static app_labyrinth_context_t s_app;
@@ -66,64 +73,13 @@ static int approach_int(int current, int target, int step)
     return target;
 }
 
-static int integer_sqrt(int value)
-{
-    int root = 0;
-    while (((root + 1) * (root + 1)) <= value) {
-        root++;
-    }
-    return root;
-}
-
-static int sign_int(int value)
-{
-    if (value > 0) {
-        return 1;
-    }
-    if (value < 0) {
-        return -1;
-    }
-    return 0;
-}
-
-static int motion_step_percent(int current, int target, int *velocity, int max_velocity, int accel)
-{
-    const int delta = target - current;
-    if (delta == 0) {
-        *velocity = 0;
-        return current;
-    }
-
-    const int braking_velocity = integer_sqrt(2 * accel * abs(delta));
-    const int desired_speed = (braking_velocity > max_velocity) ? max_velocity : braking_velocity;
-    const int desired_velocity = sign_int(delta) * desired_speed;
-    *velocity = approach_int(*velocity, desired_velocity, accel);
-
-    if (abs(delta) <= abs(*velocity)) {
-        *velocity = 0;
-        return target;
-    }
-
-    return current + *velocity;
-}
-
-static int motion_step_for_target(int current, int target, int *velocity)
-{
-    const bool returning_to_center = (target == 0);
-    const int max_velocity = returning_to_center ? SERVO_CENTER_MAX_VELOCITY : SERVO_MAX_VELOCITY;
-    const int accel = returning_to_center ? SERVO_CENTER_ACCEL : SERVO_ACCEL;
-
-    return motion_step_percent(current, target, velocity, max_velocity, accel);
-}
-
 static int update_servo_target(int current_target, int requested)
 {
-    return (abs(requested - current_target) < SERVO_TARGET_DEADBAND) ? current_target : requested;
-}
+    if (requested == 0) {
+        return 0;
+    }
 
-static bool target_reversed(int previous_target, int next_target)
-{
-    return previous_target != 0 && next_target != 0 && sign_int(previous_target) != sign_int(next_target);
+    return (abs(requested - current_target) < SERVO_TARGET_DEADBAND) ? current_target : requested;
 }
 
 static int clamp_servo_output(int percent_tenths)
@@ -160,15 +116,21 @@ static int tenths_fraction_abs(int value)
 static void joystick_task(void *arg)
 {
     app_labyrinth_context_t *ctx = (app_labyrinth_context_t *)arg;
+    uint32_t failure_count = 0;
 
     while (true) {
         bsp_joystick_sample_t sample = {0};
         const esp_err_t err = bsp_joystick_read(&ctx->joystick, &sample);
         if (err == ESP_OK) {
+            failure_count = 0;
             (void)rtos_queue_send(ctx->servo_queue, &sample, 0);
             (void)rtos_queue_send(ctx->debug_queue, &sample, 0);
         } else {
-            ESP_LOGW(TAG, "Falha na leitura do joystick: %s", esp_err_to_name(err));
+            failure_count++;
+            if (failure_count >= JOYSTICK_LOG_PRINT_EVERY_SAMPLES) {
+                ESP_LOGW(TAG, "Falha na leitura do joystick: %s", esp_err_to_name(err));
+                failure_count = 0;
+            }
         }
 
         rtos_delay_ms(JOYSTICK_PERIOD_MS);
@@ -178,28 +140,39 @@ static void joystick_task(void *arg)
 static void mpu6050_task(void *arg)
 {
     app_labyrinth_context_t *ctx = (app_labyrinth_context_t *)arg;
+    uint32_t sample_count = 0;
+    uint32_t failure_count = 0;
 
     while (true) {
         bsp_mpu6050_sample_t sample = {0};
         const esp_err_t err = bsp_mpu6050_read(&ctx->mpu6050, &sample);
         if (err == ESP_OK) {
-            printf("{\"sensor\":\"mpu6050\",\"pitch_x_deg\":%.2f,\"roll_y_deg\":%.2f,"
-                   "\"accel_pitch_deg\":%.2f,\"accel_roll_deg\":%.2f,\"dt_ms\":%.1f,"
-                   "\"accel_g\":{\"x\":%.3f,\"y\":%.3f,\"z\":%.3f},"
-                   "\"gyro_dps\":{\"x\":%.2f,\"y\":%.2f,\"z\":%.2f}}\n",
-                   sample.pitch_deg,
-                   sample.roll_deg,
-                   sample.accel_pitch_deg,
-                   sample.accel_roll_deg,
-                   sample.dt_s * 1000.0f,
-                   sample.accel_x_g,
-                   sample.accel_y_g,
-                   sample.accel_z_g,
-                   sample.gyro_x_dps,
-                   sample.gyro_y_dps,
-                   sample.gyro_z_dps);
+            failure_count = 0;
+            sample_count++;
+            if (sample_count >= MPU6050_SERIAL_PRINT_EVERY_SAMPLES) {
+                printf("{\"sensor\":\"mpu6050\",\"pitch_x_deg\":%.2f,\"roll_y_deg\":%.2f,"
+                       "\"accel_pitch_deg\":%.2f,\"accel_roll_deg\":%.2f,\"dt_ms\":%.1f,"
+                       "\"accel_g\":{\"x\":%.3f,\"y\":%.3f,\"z\":%.3f},"
+                       "\"gyro_dps\":{\"x\":%.2f,\"y\":%.2f,\"z\":%.2f}}\n",
+                       sample.pitch_deg,
+                       sample.roll_deg,
+                       sample.accel_pitch_deg,
+                       sample.accel_roll_deg,
+                       sample.dt_s * 1000.0f,
+                       sample.accel_x_g,
+                       sample.accel_y_g,
+                       sample.accel_z_g,
+                       sample.gyro_x_dps,
+                       sample.gyro_y_dps,
+                       sample.gyro_z_dps);
+                sample_count = 0;
+            }
         } else {
-            ESP_LOGW(TAG, "Falha na leitura do MPU6050: %s", esp_err_to_name(err));
+            failure_count++;
+            if (failure_count >= MPU6050_LOG_PRINT_EVERY_SAMPLES) {
+                ESP_LOGW(TAG, "Falha na leitura do MPU6050: %s", esp_err_to_name(err));
+                failure_count = 0;
+            }
         }
 
         rtos_delay_ms(MPU6050_PERIOD_MS);
@@ -213,8 +186,6 @@ static void servo_task(void *arg)
     int current_y_percent = 0;
     int target_x_percent = 0;
     int target_y_percent = 0;
-    int velocity_x_percent = 0;
-    int velocity_y_percent = 0;
     uint32_t stable_x_sample_count = 0;
     uint32_t stable_y_sample_count = 0;
     bool pulse_x_relaxed = false;
@@ -227,39 +198,31 @@ static void servo_task(void *arg)
             const int previous_y_percent = current_y_percent;
             const int requested_x_percent = clamp_servo_output(sample.x_percent_tenths);
             const int requested_y_percent = clamp_servo_output(-sample.y_percent_tenths);
-            const int previous_target_x_percent = target_x_percent;
-            const int previous_target_y_percent = target_y_percent;
             target_x_percent = update_servo_target(target_x_percent, requested_x_percent);
             target_y_percent = update_servo_target(target_y_percent, requested_y_percent);
+            ctx->servo_x_target_tenths = target_x_percent;
+            ctx->servo_y_target_tenths = target_y_percent;
 
-            if (target_reversed(previous_target_x_percent, target_x_percent)) {
-                velocity_x_percent = 0;
-            }
-            if (target_reversed(previous_target_y_percent, target_y_percent)) {
-                velocity_y_percent = 0;
-            }
-
-            const int next_x_percent = motion_step_for_target(current_x_percent,
-                                                              target_x_percent,
-                                                              &velocity_x_percent);
-            const int next_y_percent = motion_step_for_target(current_y_percent,
-                                                              target_y_percent,
-                                                              &velocity_y_percent);
+            const int next_x_percent = approach_int(current_x_percent, target_x_percent, SERVO_STEP_TENTHS);
+            const int next_y_percent = approach_int(current_y_percent, target_y_percent, SERVO_STEP_TENTHS);
             bool wrote_x = false;
             bool wrote_y = false;
 
             if (next_x_percent != current_x_percent) {
                 ESP_ERROR_CHECK_WITHOUT_ABORT(bsp_servo_write_tenths_percent(&ctx->servo_x, next_x_percent));
                 current_x_percent = next_x_percent;
+                ctx->servo_x_current_tenths = current_x_percent;
                 wrote_x = true;
             }
 
             if (next_y_percent != current_y_percent) {
                 ESP_ERROR_CHECK_WITHOUT_ABORT(bsp_servo_write_tenths_percent(&ctx->servo_y, next_y_percent));
                 current_y_percent = next_y_percent;
+                ctx->servo_y_current_tenths = current_y_percent;
                 wrote_y = true;
             }
 
+#if SERVO_RELAX_ENABLED
             if (wrote_x || !servo_can_relax(current_x_percent, target_x_percent)) {
                 stable_x_sample_count = 0;
                 pulse_x_relaxed = false;
@@ -281,6 +244,12 @@ static void servo_task(void *arg)
                     pulse_y_relaxed = true;
                 }
             }
+#else
+            (void)stable_x_sample_count;
+            (void)stable_y_sample_count;
+            (void)pulse_x_relaxed;
+            (void)pulse_y_relaxed;
+#endif
 
 #if SERVO_OUTPUT_LOG_ENABLED
             if (wrote_x || wrote_y) {
@@ -349,7 +318,7 @@ static void status_task(void *arg)
         sample_count++;
         if (sample_count >= DEBUG_PRINT_EVERY_SAMPLES) {
             ESP_LOGI(TAG,
-                     "joy_raw=(%4d,%4d) joy_cmd=(%c%3d.%1d%%,%c%3d.%1d%%) servo_pulse=(%4lu,%4lu)us",
+                     "joy_raw=(%4d,%4d) joy_cmd=(%c%3d.%1d%%,%c%3d.%1d%%) servo_target=(%c%3d.%1d%%,%c%3d.%1d%%) servo_current=(%c%3d.%1d%%,%c%3d.%1d%%) servo_pulse=(%4lu,%4lu)us",
                      sample.x_raw,
                      sample.y_raw,
                      tenths_sign(sample.x_percent_tenths),
@@ -358,6 +327,18 @@ static void status_task(void *arg)
                      tenths_sign(sample.y_percent_tenths),
                      tenths_whole_abs(sample.y_percent_tenths),
                      tenths_fraction_abs(sample.y_percent_tenths),
+                     tenths_sign(ctx->servo_x_target_tenths),
+                     tenths_whole_abs(ctx->servo_x_target_tenths),
+                     tenths_fraction_abs(ctx->servo_x_target_tenths),
+                     tenths_sign(ctx->servo_y_target_tenths),
+                     tenths_whole_abs(ctx->servo_y_target_tenths),
+                     tenths_fraction_abs(ctx->servo_y_target_tenths),
+                     tenths_sign(ctx->servo_x_current_tenths),
+                     tenths_whole_abs(ctx->servo_x_current_tenths),
+                     tenths_fraction_abs(ctx->servo_x_current_tenths),
+                     tenths_sign(ctx->servo_y_current_tenths),
+                     tenths_whole_abs(ctx->servo_y_current_tenths),
+                     tenths_fraction_abs(ctx->servo_y_current_tenths),
                      (unsigned long)ctx->servo_x.last_pulse_us,
                      (unsigned long)ctx->servo_y.last_pulse_us);
             sample_count = 0;
