@@ -767,9 +767,9 @@
       "timezone": "browser",
       "from": "now-30s",
       "to": "now",
-      "autoRefresh": "500ms",
+      "autoRefresh": "1s",
       "autoRefreshIntervals": [
-        "500ms",
+        "1s",
         "5s",
         "10s",
         "30s",

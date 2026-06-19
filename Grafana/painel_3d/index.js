@@ -57,13 +57,13 @@ function fetchInflux() {
 }
 
 //ajustar de acordo com a taxa de atualização do grafana (em ms)
-setInterval(fetchInflux, 500);
+setInterval(fetchInflux, 1000);
 
 function animate() {
     requestAnimationFrame(animate);
     
-    mesa.rotation.x += (targetPitch - mesa.rotation.x) * 0.6;
-    mesa.rotation.z += (-targetRoll - mesa.rotation.z) * 0.6;
+    mesa.rotation.x += (targetPitch - mesa.rotation.x) * 0.1;
+    mesa.rotation.z += (-targetRoll - mesa.rotation.z) * 0.1;
     
     renderer.render(scene, camera);
 }
