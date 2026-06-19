@@ -7,5 +7,11 @@
     "OPENOCD_SCRIPTS": "/home/Rodrigues/.espressif/tools/openocd-esp32/v0.12.0-esp32-20240318/openocd-esp32/share/openocd/scripts",
     "IDF_TARGET": "esp32s3"
   },
-  "idf.port": "/dev/ttyACM2"
+  "idf.port": "/dev/ttyACM2",
+  "clangd.path": "/home/joao/.espressif/tools/esp-clang/esp-20.1.1_20250829/esp-clang/bin/clangd",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=**",
+    "--compile-commands-dir=/home/joao/sistemasembarcados/projeto-labirinto/build"
+  ]
 }
