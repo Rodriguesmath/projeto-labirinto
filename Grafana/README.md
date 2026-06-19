@@ -133,28 +133,6 @@ O dashboard importado estará imediatamente disponível. Para ativar a atualiza�
 
 O modelo 3D da mesa (localizado na pasta `painel_3d/`) atua como um cliente independente no navegador, consumindo dados do InfluxDB via API.
 
-### Sincronização de Velocidade
-
-O Grafana e o banco de dados estão configurados para atualizar a cada 500ms. Para evitar a "dessincronização de relógios" e o arrasto visual do modelo 3D, o arquivo JavaScript precisa consultar o banco de forma agressiva e atualizar a posição instantaneamente, sem aplicar cálculos extras de suavização.
-
-Certifique-se de que o final do seu arquivo `painel_3d/index.js` esteja configurado da seguinte maneira:
-
-```javascript
-// Consulta o banco a cada 50 milissegundos para capturar a mudança exata no InfluxDB
-setInterval(fetchInflux, 50);
-
-function animate() {
-    requestAnimationFrame(animate);
-    
-    // Iguala a variável diretamente. A mesa vai travar na posição instantaneamente, no mesmo compasso do Grafana
-    mesa.rotation.x = targetPitch;
-    mesa.rotation.z = -targetRoll; // Inversão de eixo para espelhar o comportamento visual correto
-    
-    renderer.render(scene, camera);
-}
-
-```
-
 ## Formato de Dados Esperado
 
 O firmware do ESP32-S3 transmite via UART (115200 bps) linhas JSON no seguinte formato:
