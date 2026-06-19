@@ -1,0 +1,4 @@
+venv/
+__pycache__/
+*.pyc
+painel_3d/env.js

@@ -3,8 +3,9 @@
 ## @file start_system.sh
 ## @brief Orquestrador do sistema de monitoramento da mesa labirinto.
 ##
-## Ponto de entrada principal que configura as credenciais do InfluxDB,
-## verifica o estado do Grafana e inicia o bridge de captura serial.
+## Ponto de entrada principal que levanta o Gêmeo Digital 3D local,
+## configura as credenciais do InfluxDB, verifica o estado do Grafana 
+## e inicia o bridge de captura serial.
 ##
 ## Uso:
 ##   ./start_system.sh <URL> <TOKEN> <ORG> <BUCKET>
@@ -40,17 +41,17 @@ echo "[start_system] Credenciais InfluxDB configuradas (org=$INFLUXDB_ORG, bucke
 # Por ora, apenas verifica se o serviço está ativo no systemd.
 #
 
-if systemctl is-active --quiet grafana; then
+if systemctl is-active --quiet grafana-server || systemctl is-active --quiet grafana; then
     echo "[start_system] Grafana está rodando."
 else
-    echo "[start_system] Aviso: Grafana não está rodando." >&2
+    echo "[start_system] Aviso: Grafana não está rodando. Considere iniciar com 'sudo systemctl start grafana-server'." >&2
 fi
 
-# ── Abertura do Gêmeo Digital no navegador ───────────────────────────────────
+# ── Abertura do Dashboard no navegador ───────────────────────────────────────
 
 GRAFANA_URL="http://localhost:3000"
 
-echo "[start_system] Abrindo o Gêmeo Digital no navegador..."
+echo "[start_system] Abrindo o Dashboard no navegador..."
 
 if command -v xdg-open &>/dev/null; then
     xdg-open "$GRAFANA_URL" &>/dev/null &
@@ -58,9 +59,36 @@ else
     python -m webbrowser "$GRAFANA_URL" &>/dev/null &
 fi
 
-# ── Execução do Bridge serial → InfluxDB ─────────────────────────────────────
+# ── Inicialização do Servidor do Gêmeo Digital 3D ────────────────────────────
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PAINEL_DIR="${SCRIPT_DIR}/painel_3d"
+
+if [ -d "$PAINEL_DIR" ]; then
+    echo "[start_system] Injetando variáveis no painel 3D..."
+    
+    # Gera o arquivo env.js com os parâmetros passados no terminal
+    cat <<EOF > "${PAINEL_DIR}/env.js"
+export const ENV = {
+    URL: "${INFLUXDB_URL}",
+    TOKEN: "${INFLUXDB_TOKEN}",
+    ORG: "${INFLUXDB_ORG}",
+    BUCKET: "${INFLUXDB_BUCKET}"
+};
+EOF
+
+    echo "[start_system] Iniciando o servidor web do Gêmeo Digital 3D na porta 8000..."
+    # Inicia o servidor em segundo plano silenciosamente
+    (cd "$PAINEL_DIR" && python -m http.server 8000 &>/dev/null) &
+    SERVER_PID=$!
+    
+    # Garante que o servidor web seja destruído ao abortar o script (Ctrl+C)
+    trap 'echo "[start_system] Encerrando servidor 3D..."; kill $SERVER_PID 2>/dev/null' EXIT
+else
+    echo "[start_system] Aviso: Diretório do painel 3D não encontrado em $PAINEL_DIR." >&2
+fi
+
+# ── Execução do Bridge serial → InfluxDB ─────────────────────────────────────
 
 VENV_ACTIVATE="${SCRIPT_DIR}/serial_bridge/venv/bin/activate"
 BRIDGE_SCRIPT="${SCRIPT_DIR}/serial_bridge/bridge.py"
@@ -75,5 +103,6 @@ echo "[start_system] Iniciando bridge serial..."
 
 # shellcheck source=/dev/null
 source "$VENV_ACTIVATE"
-exec python "$BRIDGE_SCRIPT"
 
+# Usamos a chamada direta em vez do 'exec' para permitir que o handler do 'trap' capture o evento de saída
+python "$BRIDGE_SCRIPT"

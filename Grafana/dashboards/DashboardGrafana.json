@@ -4,17 +4,19 @@
   "metadata": {
     "name": "adtw9x2",
     "namespace": "default",
-    "uid": "e249338c-266f-45b5-8b93-778de7db1aa0",
-    "resourceVersion": "1781823655032988",
-    "generation": 1,
-    "creationTimestamp": "2026-06-18T23:00:55Z",
+    "uid": "5bbbba8e-86c6-44e6-bb91-9629b3bce84a",
+    "resourceVersion": "1781841469629018",
+    "generation": 7,
+    "creationTimestamp": "2026-06-19T02:29:43Z",
     "labels": {
-      "grafana.app/deprecatedInternalID": "592164963512320"
+      "grafana.app/deprecatedInternalID": "644713479155712"
     },
     "annotations": {
-      "grafana.app/createdBy": "user:cfpjjbyeihrlsf",
+      "grafana.app/createdBy": "user:bfpk94ctzn1tsa",
       "grafana.app/folder": "",
-      "grafana.app/saved-from-ui": "Grafana v13.0.2 (3fcdbc5a6e)"
+      "grafana.app/saved-from-ui": "Grafana v13.0.2 (3fcdbc5a)",
+      "grafana.app/updatedBy": "user:bfpk94ctzn1tsa",
+      "grafana.app/updatedTimestamp": "2026-06-19T03:57:49Z"
     }
   },
   "spec": {
@@ -40,7 +42,6 @@
       }
     ],
     "cursorSync": "Off",
-    "description": "",
     "editable": true,
     "elements": {
       "panel-1": {
@@ -62,10 +63,10 @@
                       "group": "influxdb",
                       "version": "v0",
                       "datasource": {
-                        "name": "dfpjmadztf85cf"
+                        "name": "efpkcktgks8w0d"
                       },
                       "spec": {
-                        "query": "from(bucket: \"Labyrinth\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"orientacao_mesa\")\n  |> filter(fn: (r) => r[\"_field\"] == \"pitch_x_deg\" or r[\"_field\"] == \"roll_y_deg\")\n  |> last()\n  |> pivot(rowKey:[\"_measurement\"], columnKey: [\"_field\"], valueColumn: \"_value\")"
+                        "query": "from(bucket: \"labirinto\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"orientacao_mesa\")\n  |> filter(fn: (r) => r[\"_field\"] == \"pitch_x_deg\" or r[\"_field\"] == \"roll_y_deg\")\n  |> last()\n  |> pivot(rowKey:[\"_measurement\"], columnKey: [\"_field\"], valueColumn: \"_value\")"
                       }
                     },
                     "refId": "A",
@@ -215,10 +216,10 @@
                       "group": "influxdb",
                       "version": "v0",
                       "datasource": {
-                        "name": "dfpjmadztf85cf"
+                        "name": "efpkcktgks8w0d"
                       },
                       "spec": {
-                        "query": "from(bucket: \"Labyrinth\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"orientacao_mesa\")\n  |> filter(fn: (r) => r[\"_field\"] == \"pitch_x_deg\")\n  |> last()"
+                        "query": "from(bucket: \"labirinto\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"orientacao_mesa\")\n  |> filter(fn: (r) => r[\"_field\"] == \"pitch_x_deg\")\n  |> last()"
                       }
                     },
                     "refId": "A",
@@ -307,10 +308,10 @@
                       "group": "influxdb",
                       "version": "v0",
                       "datasource": {
-                        "name": "dfpjmadztf85cf"
+                        "name": "efpkcktgks8w0d"
                       },
                       "spec": {
-                        "query": "from(bucket: \"Labyrinth\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"orientacao_mesa\")\n  |> filter(fn: (r) => r[\"_field\"] == \"roll_y_deg\")\n  |> last()"
+                        "query": "from(bucket: \"labirinto\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"orientacao_mesa\")\n  |> filter(fn: (r) => r[\"_field\"] == \"roll_y_deg\")\n  |> last()"
                       }
                     },
                     "refId": "A",
@@ -399,10 +400,10 @@
                       "group": "influxdb",
                       "version": "v0",
                       "datasource": {
-                        "name": "dfpjmadztf85cf"
+                        "name": "efpkcktgks8w0d"
                       },
                       "spec": {
-                        "query": "from(bucket: \"Labyrinth\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"orientacao_mesa\")\n  |> filter(fn: (r) => r[\"_field\"] == \"pitch_x_deg\" or r[\"_field\"] == \"roll_y_deg\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> yield(name: \"last\")"
+                        "query": "from(bucket: \"labirinto\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"orientacao_mesa\")\n  |> filter(fn: (r) => r[\"_field\"] == \"pitch_x_deg\" or r[\"_field\"] == \"roll_y_deg\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> yield(name: \"last\")"
                       }
                     },
                     "refId": "A",
@@ -548,10 +549,10 @@
                       "group": "influxdb",
                       "version": "v0",
                       "datasource": {
-                        "name": "dfpjmadztf85cf"
+                        "name": "efpkcktgks8w0d"
                       },
                       "spec": {
-                        "query": "from(bucket: \"Labyrinth\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"orientacao_mesa\")\n  |> filter(fn: (r) => r[\"_field\"] == \"connection_status\")\n  |> last()"
+                        "query": "from(bucket: \"labirinto\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"orientacao_mesa\")\n  |> filter(fn: (r) => r[\"_field\"] == \"connection_status\")\n  |> last()"
                       }
                     },
                     "refId": "A",
@@ -634,6 +635,43 @@
             }
           }
         }
+      },
+      "panel-6": {
+        "kind": "Panel",
+        "spec": {
+          "id": 6,
+          "title": "Plano de Inclinação (Gêmeo Digital)",
+          "description": "Gêmeo digital 3d",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "text",
+            "version": "13.0.2",
+            "spec": {
+              "options": {
+                "code": {
+                  "language": "plaintext",
+                  "showLineNumbers": false,
+                  "showMiniMap": false
+                },
+                "content": "<iframe src=\"http://localhost:8000\" width=\"100%\" height=\"500px\" style=\"border: none; background: transparent; overflow: hidden;\" allowtransparency=\"true\" scrolling=\"no\"></iframe>",
+                "mode": "html"
+              },
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+              }
+            }
+          }
+        }
       }
     },
     "layout": {
@@ -697,11 +735,24 @@
             "spec": {
               "x": 11,
               "y": 18,
-              "width": 11,
+              "width": 13,
               "height": 2,
               "element": {
                 "kind": "ElementReference",
                 "name": "panel-3"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 0,
+              "y": 20,
+              "width": 24,
+              "height": 19,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-6"
               }
             }
           }
@@ -716,8 +767,9 @@
       "timezone": "browser",
       "from": "now-30s",
       "to": "now",
-      "autoRefresh": "5s",
+      "autoRefresh": "500ms",
       "autoRefreshIntervals": [
+        "500ms",
         "5s",
         "10s",
         "30s",
