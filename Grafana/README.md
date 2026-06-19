@@ -2,7 +2,7 @@
 
 Módulo de observabilidade do projeto Labirinto para a disciplina de Sistemas Embarcados 2026.1.
 
-Este diretório contém o bridge Python (`serial_bridge/bridge.py`) responsável por ler dados JSON de orientação (MPU6050) transmitidos pelo ESP32-S3 via UART e inseri-los em um banco InfluxDB v2.x, além do script Bash (`start_system.sh`) que orquestra a inicialização do sistema, levanta o servidor do Gêmeo Digital 3D e abre automaticamente o dashboard do Grafana no navegador.
+Este diretório contém o bridge Python (`serial_bridge/bridge.py`) responsável por ler dados JSON de orientação (MPU6050) transmitidos pelo ESP32-S3 via UART e inseri-los em um banco InfluxDB v2.x, além do script Bash (`start_system.sh`) que orquestra a inicialização do sistema, injeta as configurações do Gêmeo Digital 3D e abre automaticamente o dashboard do Grafana no navegador.
 
 ## Pré-requisitos
 
@@ -133,6 +133,28 @@ O dashboard importado estará imediatamente disponível. Para ativar a atualiza�
 
 O modelo 3D da mesa (localizado na pasta `painel_3d/`) atua como um cliente independente no navegador, consumindo dados do InfluxDB via API.
 
+### Iniciando o Servidor Web (Renderização 3D)
+
+Para garantir a estabilidade do sistema e evitar processos "zumbis" travados em segundo plano, o servidor do painel 3D deve ser iniciado manualmente. Após rodar o orquestrador `start_system.sh`, siga estes passos:
+
+1. Abra uma **nova aba** ou janela no seu terminal.
+2. Navegue até o diretório do painel 3D:
+```bash
+cd painel_3d/
+
+```
+
+
+3. Inicie o servidor embutido do Python na porta 8000:
+```bash
+python3 -m http.server 8000
+
+```
+
+
+
+Mantenha este terminal aberto. O iframe do Grafana agora conseguirá acessar o `index.html` e os scripts necessários para renderizar a malha 3D.
+
 ## Formato de Dados Esperado
 
 O firmware do ESP32-S3 transmite via UART (115200 bps) linhas JSON no seguinte formato:
@@ -188,11 +210,11 @@ Exemplo prático:
 1. Valida os 4 argumentos. Encerra com mensagem de erro se algum estiver ausente.
 2. Exporta as credenciais como variáveis de ambiente (`INFLUXDB_URL`, `INFLUXDB_TOKEN`, `INFLUXDB_ORG`, `INFLUXDB_BUCKET`).
 3. Verifica se o serviço Grafana está ativo via `systemctl`.
-4. **Inicia automaticamente o servidor web local do Gêmeo Digital na porta 8000 (em segundo plano).**
+4. **Gera dinamicamente o arquivo `env.js` com as credenciais do banco de dados para o Gêmeo Digital.**
 5. Abre automaticamente o navegador padrão em `http://localhost:3000` (dashboard do Grafana).
-6. Ativa o ambiente virtual e inicia o bridge de captura no terminal.
+6. Ativa o ambiente virtual e inicia o bridge de captura no terminal principal.
 
-O bridge escaneia as portas seriais disponíveis e mantém a captura contínua. Para encerrar o sistema, utilize `Ctrl+C` no terminal. O script interromperá automaticamente o bridge e o servidor web do Gêmeo Digital.
+O bridge escaneia as portas seriais disponíveis e mantém a captura contínua. Para encerrar o sistema de captura, utilize `Ctrl+C` no terminal principal. Lembre-se também de encerrar o servidor web na outra aba do terminal.
 
 ## Estrutura do Diretório
 
