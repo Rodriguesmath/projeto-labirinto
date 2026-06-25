@@ -108,6 +108,10 @@ class Bridge:
             if data.get("sensor") != EXPECTED_SENSOR_TAG:
                 continue
 
+            roll = data.get("roll_y_deg", 0.0)
+            roll = roll - 180.0 if roll >= 0 else roll + 180.0
+            data["roll_y_deg"] = max(-15.0, min(15.0, roll))
+
             self._writer.write_sample(data)
 
     def _on_disconnect(self):
