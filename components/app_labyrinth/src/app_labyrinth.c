@@ -8,6 +8,7 @@
 #include "bsp_joystick.h"
 #include "bsp_mpu6050.h"
 #include "bsp_servo.h"
+#include "bsp_victory_sensor.h"
 #include "esp_check.h"
 #include "esp_log.h"
 #include "rtos_port.h"
@@ -27,8 +28,11 @@
 #define SERVO_TASK_PRIORITY 4U
 #define MPU6050_TASK_PRIORITY 4U
 #define STATUS_TASK_PRIORITY 3U
+#define VICTORY_SENSOR_TASK_PRIORITY 3U
 #define DEBUG_PRINT_EVERY_SAMPLES JOYSTICK_LOG_PRINT_EVERY_SAMPLES
 #define SERVO_IDLE_DELAY_MS 1U
+#define VICTORY_SENSOR_PERIOD_MS 50U
+#define VICTORY_FILTER_CONFIRM_COUNT 3U
 #define SERVO_STEP_TENTHS 8
 #define SERVO_TARGET_DEADBAND 2
 #define SERVO_OUTPUT_MAX 150
@@ -45,6 +49,7 @@ typedef struct {
     bsp_mpu6050_t mpu6050;
     bsp_servo_t servo_x;
     bsp_servo_t servo_y;
+    bsp_victory_sensor_t victory_sensor;
     rtos_queue_handle_t servo_queue;
     rtos_queue_handle_t debug_queue;
     int servo_x_current_tenths;
@@ -310,6 +315,39 @@ static void servo_task(void *arg)
     }
 }
 
+static void victory_sensor_task(void *arg)
+{
+    app_labyrinth_context_t *ctx = (app_labyrinth_context_t *)arg;
+    uint32_t confirm_count = 0;
+    bool led_on = false;
+
+    while (true) {
+        bool detected = false;
+        const esp_err_t err = bsp_victory_sensor_read(&ctx->victory_sensor, &detected);
+        if (err == ESP_OK) {
+            if (detected) {
+                confirm_count++;
+                if (confirm_count >= VICTORY_FILTER_CONFIRM_COUNT && !led_on) {
+                    ESP_ERROR_CHECK_WITHOUT_ABORT(bsp_victory_sensor_set_led(&ctx->victory_sensor, true));
+                    led_on = true;
+                    ESP_LOGI(TAG, "Vitoria detectada! Bolinha presente.");
+                }
+            } else {
+                confirm_count = 0;
+                if (led_on) {
+                    ESP_ERROR_CHECK_WITHOUT_ABORT(bsp_victory_sensor_set_led(&ctx->victory_sensor, false));
+                    led_on = false;
+                    ESP_LOGI(TAG, "Bolinha removida.");
+                }
+            }
+        } else {
+            ESP_LOGW(TAG, "Falha na leitura do sensor de vitoria: %s", esp_err_to_name(err));
+        }
+
+        rtos_delay_ms(VICTORY_SENSOR_PERIOD_MS);
+    }
+}
+
 static void status_task(void *arg)
 {
     app_labyrinth_context_t *ctx = (app_labyrinth_context_t *)arg;
@@ -379,6 +417,10 @@ esp_err_t app_labyrinth_start(void)
     const bsp_mpu6050_config_t mpu6050_config = bsp_mpu6050_default_config();
     ESP_RETURN_ON_ERROR(bsp_mpu6050_init(&s_app.mpu6050, &mpu6050_config), TAG, "mpu6050 init");
 
+    const bsp_victory_sensor_config_t victory_sensor_config = bsp_victory_sensor_default_config();
+    ESP_RETURN_ON_ERROR(bsp_victory_sensor_init(&s_app.victory_sensor, &victory_sensor_config),
+                        TAG, "victory sensor init");
+
     ESP_RETURN_ON_ERROR(create_queue(&s_app.servo_queue, SERVO_QUEUE_LENGTH, sizeof(bsp_joystick_sample_t)),
                         TAG, "servo queue");
     ESP_RETURN_ON_ERROR(create_queue(&s_app.debug_queue, DEBUG_QUEUE_LENGTH, sizeof(bsp_joystick_sample_t)),
@@ -413,10 +455,19 @@ esp_err_t app_labyrinth_start(void)
         .priority = STATUS_TASK_PRIORITY,
     };
 
+    const rtos_task_config_t victory_sensor_task_config = {
+        .name            = "victory_task",
+        .entry           = victory_sensor_task,
+        .arg             = &s_app,
+        .stack_size_bytes = TASK_STACK_BYTES,
+        .priority        = VICTORY_SENSOR_TASK_PRIORITY,
+    };
+
     if (rtos_task_create(&joystick_task_config, NULL) != RTOS_OK ||
         rtos_task_create(&servo_task_config, NULL) != RTOS_OK ||
         rtos_task_create(&mpu6050_task_config, NULL) != RTOS_OK ||
-        rtos_task_create(&status_task_config, NULL) != RTOS_OK) {
+        rtos_task_create(&status_task_config, NULL) != RTOS_OK ||
+        rtos_task_create(&victory_sensor_task_config, NULL) != RTOS_OK) {
         return ESP_ERR_NO_MEM;
     }
 
