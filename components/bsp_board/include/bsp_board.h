@@ -35,10 +35,16 @@ extern "C" {
 #define BSP_MPU6050_SCL_GPIO 36
 
 /** GPIO that drives the X-axis servo PWM signal. */
-#define BSP_SERVO_X_GPIO GPIO_NUM_4
+#define BSP_SERVO_X_GPIO GPIO_NUM_5
 
 /** GPIO that drives the Y-axis servo PWM signal. */
-#define BSP_SERVO_Y_GPIO GPIO_NUM_5
+#define BSP_SERVO_Y_GPIO GPIO_NUM_4
+
+/** GPIO connected to the optical reflection sensor for victory detection. */
+#define BSP_SENSOR_VITORIA_GPIO GPIO_NUM_17
+
+/** GPIO connected to the victory indicator LED. */
+#define BSP_LED_VITORIA_GPIO GPIO_NUM_6
 
 /**
  * @brief Initialize basic board services.
