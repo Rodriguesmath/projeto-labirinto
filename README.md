@@ -11,7 +11,7 @@ Firmware e sistema de observabilidade do projeto final de Sistemas Embarcados 20
 
 ## Demonstração
 
-> 🎥 **[Vídeo de demonstração]([https://youtube.com](https://youtu.be/gmVR7T7c4wo?si=Z5PvcJxGvDtTYVHB))**
+>**[Vídeo de demonstração](https://youtu.be/gmVR7T7c4wo?si=Z5PvcJxGvDtTYVHB)**
 
 O projeto foi estruturado como uma aplicação ESP-IDF modular, com abstração de hardware por componente, documentação Doxygen, uma camada própria para isolar o uso direto do RTOS e um módulo de observabilidade independente em Python.
 
