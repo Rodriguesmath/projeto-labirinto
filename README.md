@@ -9,6 +9,10 @@
 
 Firmware e sistema de observabilidade do projeto final de Sistemas Embarcados 2026.1: uma mesa labirinto controlada por joystick analógico, com dois servomotores para inclinação nos eixos X/Y, leitura de orientação por MPU6050 e gêmeo digital em tempo real exibido no Grafana.
 
+## Demonstração
+
+> 🎥 **[Vídeo de demonstração — inserir link do YouTube aqui](https://youtube.com)**
+
 O projeto foi estruturado como uma aplicação ESP-IDF modular, com abstração de hardware por componente, documentação Doxygen, uma camada própria para isolar o uso direto do RTOS e um módulo de observabilidade independente em Python.
 
 ## Status Da Fase 3 — Gêmeo Digital e Integração com Grafana
